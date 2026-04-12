@@ -13,18 +13,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AuthProvider {
+  CREDENTIALS
+  GOOGLE
+  GITHUB
+}
+
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  provider      String?   @default("credentials")
-  accounts      Account[]
-  sessions      Session[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String?   // Only for credentials provider
+  
+  // OAuth provider tracking
+  primaryProvider AuthProvider @default(CREDENTIALS)
+  lastSignIn      DateTime?
+  
+  // Relations
+  accounts        Account[]
+  sessions        Session[]
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Indexes for faster queries
+  @@index([email])
+  @@index([primaryProvider])
 }
 
 model Account {
@@ -33,6 +50,8 @@ model Account {
   type               String
   provider           String
   providerAccountId  String
+  
+  // OAuth tokens
   refresh_token      String?  @db.Text
   access_token       String?  @db.Text
   expires_at         Int?
@@ -40,10 +59,17 @@ model Account {
   scope              String?
   id_token           String?  @db.Text
   session_state      String?
+  
+  // Metadata
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  // Relations
   user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
+  @@index([provider])
 }
 
 model Session {
@@ -51,6 +77,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
+  createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

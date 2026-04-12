@@ -37,7 +37,6 @@ export async function registerUser(
       email,
       password: hashedPassword,
       name,
-      provider: "credentials",
     },
     select: {
       id: true,

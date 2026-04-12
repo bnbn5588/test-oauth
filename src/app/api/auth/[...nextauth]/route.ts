@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { AuthProvider } from "@prisma/client";
 
 const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -71,9 +72,36 @@ const authOptions: NextAuthOptions = {
     updateAge: 0, // Disable automatic token refresh
   },
   callbacks: {
+    async signIn({ user, account }) {
+      // Track OAuth provider and last sign-in
+      if (user.email) {
+        // Map NextAuth provider names to our AuthProvider enum
+        const providerMap: Record<string, AuthProvider> = {
+          google: AuthProvider.GOOGLE,
+          github: AuthProvider.GITHUB,
+          credentials: AuthProvider.CREDENTIALS,
+        };
+
+        const provider =
+          (account && providerMap[account.provider]) ||
+          AuthProvider.CREDENTIALS;
+
+        // Update user's primary provider and last sign-in
+        await prisma.user.update({
+          where: { email: user.email },
+          data: {
+            primaryProvider: provider,
+            lastSignIn: new Date(),
+          },
+        });
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
+        // Set issued at timestamp on first login (don't refresh it)
         token.id = user.id;
+        token.iat = token.iat || Math.floor(Date.now() / 1000);
       }
       return token;
     },
@@ -81,6 +109,12 @@ const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
       }
+      // Calculate expiration based on original issue time, not current access
+      const now = Math.floor(Date.now() / 1000);
+      const maxAge = 12 * 60 * 60; // 12 hours in seconds
+      session.expires = new Date(
+        ((token.iat as number) || now) * 1000 + maxAge * 1000,
+      ).toISOString();
       return session;
     },
   },
