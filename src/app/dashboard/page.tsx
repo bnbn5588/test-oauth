@@ -2,18 +2,65 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { UserMenu } from "@/components/auth/UserMenu";
+
+interface TimeRemaining {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  total: number;
+}
+
+function calculateTimeRemaining(expiresAt: string): TimeRemaining {
+  const now = new Date();
+  const expiry = new Date(expiresAt);
+  const diff = expiry.getTime() - now.getTime();
+
+  if (diff <= 0) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 };
+  }
+
+  const seconds = Math.floor((diff / 1000) % 60);
+  const minutes = Math.floor((diff / 1000 / 60) % 60);
+  const hours = Math.floor((diff / 1000 / 60 / 60) % 24);
+  const days = Math.floor(diff / 1000 / 60 / 60 / 24);
+
+  return { days, hours, minutes, seconds, total: diff };
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const [timeRemaining, setTimeRemaining] = useState<TimeRemaining>({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+    total: 0,
+  });
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/login");
     }
   }, [status, router]);
+
+  // Update remaining time every second
+  useEffect(() => {
+    if (!session?.expires) return;
+
+    const updateTimer = () => {
+      const remaining = calculateTimeRemaining(session.expires);
+      setTimeRemaining(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [session?.expires]);
 
   // Show loading state while checking session
   if (status === "loading") {
@@ -72,7 +119,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {/* User Info Card */}
             <div className="rounded-lg border-2 border-blue-100 bg-blue-50 p-6">
               <h3 className="mb-4 text-lg font-semibold text-gray-900">
@@ -112,9 +159,7 @@ export default function DashboardPage() {
                   <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-500 text-white">
                     ✓
                   </span>
-                  <span className="text-gray-700">
-                    JWT sessions configured
-                  </span>
+                  <span className="text-gray-700">JWT sessions configured</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-500 text-white">
@@ -123,6 +168,57 @@ export default function DashboardPage() {
                   <span className="text-gray-700">NextAuth.js active</span>
                 </li>
               </ul>
+            </div>
+
+            {/* Session Expiration Card */}
+            <div
+              className={`rounded-lg border-2 p-6 ${
+                timeRemaining.total > 86400000 // More than 1 day
+                  ? "border-blue-100 bg-blue-50"
+                  : timeRemaining.total > 3600000 // More than 1 hour
+                    ? "border-yellow-100 bg-yellow-50"
+                    : "border-red-100 bg-red-50"
+              }`}
+            >
+              <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                Session Expiration
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600">Expires at</p>
+                  <p className="font-medium text-gray-900">
+                    {session?.expires
+                      ? new Date(session.expires).toLocaleString()
+                      : "Unknown"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">Time remaining</p>
+                  <p className="font-mono text-sm font-semibold text-gray-900">
+                    {timeRemaining.days}d {timeRemaining.hours}h{" "}
+                    {timeRemaining.minutes}m {timeRemaining.seconds}s
+                  </p>
+                </div>
+
+                {timeRemaining.total <= 0 && (
+                  <div className="rounded bg-red-100 p-2 text-sm text-red-800">
+                    Your session has expired. Please log in again.
+                  </div>
+                )}
+
+                {timeRemaining.total > 0 && timeRemaining.total <= 3600000 && (
+                  <div className="rounded bg-yellow-100 p-2 text-sm text-yellow-800">
+                    ⚠️ Your session is expiring soon!
+                  </div>
+                )}
+
+                {timeRemaining.total > 3600000 && (
+                  <div className="rounded bg-blue-100 p-2 text-sm text-blue-800">
+                    ✓ Session active and valid
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

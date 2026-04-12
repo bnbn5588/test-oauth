@@ -67,7 +67,8 @@ const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 12 * 60 * 60, // 12 hours
+    updateAge: 0, // Disable automatic token refresh
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -84,6 +85,7 @@ const authOptions: NextAuthOptions = {
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === "development",
 };
 
 const handler = NextAuth(authOptions);
