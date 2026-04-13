@@ -33,7 +33,7 @@ model User {
   
   // Relations
   accounts        Account[]
-  sessions        Session[]
+  // sessions        Session[]  // Not needed — using JWT session strategy
   
   // Timestamps
   createdAt       DateTime  @default(now())
@@ -72,16 +72,17 @@ model Account {
   @@index([provider])
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  createdAt    DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
+// Session model commented out — using JWT session strategy (stateless, no DB sessions needed)
+// model Session {
+//   id           String   @id @default(cuid())
+//   sessionToken String   @unique
+//   userId       String
+//   expires      DateTime
+//   createdAt    DateTime @default(now())
+//   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+//
+//   @@index([userId])
+// }
 
 model VerificationToken {
   identifier String

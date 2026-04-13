@@ -38,6 +38,8 @@ export function LoginForm() {
 
       if (result?.ok) {
         router.push("/dashboard");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
       }
     } catch (err) {
       setError("An error occurred. Please try again.");

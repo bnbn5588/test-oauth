@@ -72,37 +72,31 @@ const authOptions: NextAuthOptions = {
     updateAge: 0, // Disable automatic token refresh
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Track OAuth provider and last sign-in
-      if (user.email) {
-        // Map NextAuth provider names to our AuthProvider enum
+    async signIn() {
+      return true;
+    },
+    async jwt({ token, user, account }) {
+      if (user) {
+        // Set issued at timestamp on first sign-in (don't refresh it on later calls)
+        token.id = user.id;
+        token.iat = token.iat || Math.floor(Date.now() / 1000);
+      }
+
+      // `account` is only present on the first sign-in, after the PrismaAdapter
+      // has already persisted the user — safe to update for both OAuth and credentials.
+      if (account && user?.email) {
         const providerMap: Record<string, AuthProvider> = {
           google: AuthProvider.GOOGLE,
           github: AuthProvider.GITHUB,
           credentials: AuthProvider.CREDENTIALS,
         };
-
-        const provider =
-          (account && providerMap[account.provider]) ||
-          AuthProvider.CREDENTIALS;
-
-        // Update user's primary provider and last sign-in
+        const provider = providerMap[account.provider] ?? AuthProvider.CREDENTIALS;
         await prisma.user.update({
           where: { email: user.email },
-          data: {
-            primaryProvider: provider,
-            lastSignIn: new Date(),
-          },
+          data: { primaryProvider: provider, lastSignIn: new Date() },
         });
       }
-      return true;
-    },
-    async jwt({ token, user }) {
-      if (user) {
-        // Set issued at timestamp on first login (don't refresh it)
-        token.id = user.id;
-        token.iat = token.iat || Math.floor(Date.now() / 1000);
-      }
+
       return token;
     },
     async session({ session, token }) {
