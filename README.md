@@ -1,91 +1,27 @@
-# OAuth App - Secure Authentication
+# Auth App
 
-A modern authentication application built with Next.js 16, NextAuth.js, and Prisma for secure user login, registration, and OAuth integration.
-
-## Features
-
-✅ **Email/Password Authentication**
-
-- User registration with email and password
-- Secure login with bcrypt password hashing
-- Form validation and error handling
-
-✅ **JWT Session Management**
-
-- Stateless session tokens stored in secure HTTP-only cookies
-- 30-day session expiration
-- Automatic session refresh
-
-✅ **Database Integration**
-
-- PostgreSQL database via Neon
-- Prisma ORM for type-safe database queries
-- User model with email, name, and profile image
-
-✅ **Google OAuth (Configured)**
-
-- OAuth provider setup ready for integration
-- Seamless social login flow
-- Account linking capabilities
-
-✅ **Dashboard & User Menu**
-
-- Protected dashboard page requiring authentication
-- User profile information display
-- Sign-out functionality
+A Next.js authentication application supporting email/password credentials and Google OAuth, built with NextAuth.js, Prisma, and PostgreSQL.
 
 ## Tech Stack
 
-- **Framework:** Next.js 16.2.3 with Turbopack
-- **Authentication:** NextAuth.js 4.24.13
-- **Database:** PostgreSQL (Neon cloud)
-- **ORM:** Prisma 5.x
-- **Styling:** Tailwind CSS 4
-- **Password Hashing:** bcrypt
-- **Language:** TypeScript 5
+| | |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| Auth | NextAuth.js v4 |
+| Session strategy | JWT (stateless, 12-hour expiry) |
+| ORM | Prisma 5 + `@next-auth/prisma-adapter` |
+| Database | PostgreSQL (Neon) |
+| Styling | Tailwind CSS v4 |
+| Language | TypeScript |
 
-## Getting Started
+## Features
 
-### Prerequisites
-
-- Node.js 20.11.1+
-- PostgreSQL database (or Neon account)
-- Environment variables configured
-
-### Environment Variables
-
-Create a `.env.local` file with the following:
-
-```env
-# Database
-DATABASE_URL="postgresql://user:password@host/database"
-
-# NextAuth
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key-here"
-
-# Google OAuth (optional)
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-```
-
-### Installation
-
-```bash
-# Install dependencies
-npm install
-
-# Setup database migrations
-npm run migrate
-
-# Build the project (optional)
-npm run build
-
-# Start development server
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+- Email/password registration and login (bcrypt hashing)
+- Google OAuth sign-in
+- JWT sessions stored in HTTP-only cookies — no database session table
+- Protected routes via Next.js middleware
+- OAuth provider and last sign-in tracking per user
+- Session expiry countdown on dashboard
 
 ## Project Structure
 
@@ -93,220 +29,175 @@ Open [http://localhost:3000](http://localhost:3000) with your browser.
 src/
 ├── app/
 │   ├── api/auth/
-│   │   ├── [...nextauth]/route.ts       # NextAuth configuration
-│   │   ├── login/route.ts               # Login API endpoint
-│   │   ├── register/route.ts            # Registration API endpoint
-│   │   └── me/route.ts                  # Current user endpoint
+│   │   ├── [...nextauth]/route.ts   # NextAuth config — providers, callbacks
+│   │   ├── register/route.ts        # POST /api/auth/register
+│   │   └── me/route.ts              # GET  /api/auth/me  (protected)
 │   ├── auth/
-│   │   ├── login/page.tsx               # Login page
-│   │   └── register/page.tsx            # Registration page
-│   ├── dashboard/page.tsx               # Protected dashboard
-│   └── layout.tsx                       # Root layout
+│   │   ├── login/page.tsx           # Login page
+│   │   └── register/page.tsx        # Register page
+│   ├── dashboard/page.tsx           # Protected dashboard with session countdown
+│   └── layout.tsx                   # Root layout — wraps app with providers
 ├── components/
-│   └── auth/
-│       ├── LoginForm.tsx                # Login form component
-│       ├── RegisterForm.tsx             # Registration form component
-│       ├── GoogleSignInButton.tsx       # Google OAuth button
-│       └── UserMenu.tsx                 # User dropdown menu
+│   ├── auth/
+│   │   ├── LoginForm.tsx            # Credentials login form
+│   │   ├── RegisterForm.tsx         # Registration form
+│   │   ├── GoogleSignInButton.tsx   # Google OAuth button
+│   │   └── UserMenu.tsx             # Dropdown with sign-out
+│   └── providers/
+│       └── NextAuthSessionProvider.tsx
 ├── context/
-│   └── AuthContext.tsx                  # Authentication context
+│   └── AuthContext.tsx              # Shared auth state + helpers
 ├── lib/
-│   ├── auth.ts                          # Auth utilities
-│   └── prisma.ts                        # Prisma client
-├── middleware.ts                        # Route protection middleware
-└── prisma/
-    └── schema.prisma                    # Database schema
+│   ├── auth.ts                      # registerUser, loginUser, getUserBy*
+│   └── prisma.ts                    # Prisma client singleton
+├── middleware.ts                    # Route protection
+└── types/
+    └── next-auth.d.ts               # JWT / Session type extensions
+
+prisma/
+├── schema.prisma                    # Database schema
+└── migrations/                      # Migration history
 ```
-
-## API Endpoints
-
-### Authentication
-
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user (credentials validation)
-- `POST /api/auth/callback/credentials` - NextAuth credentials callback
-- `GET /api/auth/session` - Get current session
-
-### User
-
-- `GET /api/auth/me` - Get current user info
-
-## Authentication Flow
-
-1. **Registration**: User creates account at `/auth/register`
-   - Email validation
-   - Password hashing with bcrypt
-   - User stored in database
-
-2. **Login**: User signs in at `/auth/login`
-   - Credentials validated via CredentialsProvider
-   - JWT token created with user ID and email
-   - Secure HTTP-only cookie set
-   - Redirected to dashboard
-
-3. **Session Management**
-   - JWT token verified on each request
-   - Session callbacks populate user data
-   - Automatic refresh on 30-day expiration
-
-4. **Route Protection**
-   - **Middleware (Server-side)**:
-     - Unauthenticated users accessing `/dashboard` → Redirected to `/auth/login`
-     - Authenticated users accessing `/auth/login`, `/auth/register`, or `/` → Redirected to `/dashboard`
-   - **Client-side (Fallback)**:
-     - Dashboard component redirects unauthenticated users to login
-     - User menu provides logout option
 
 ## Database Schema
 
-### User Table
+### User
+All users share this table regardless of how they sign in.
 
-```prisma
-model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
-  password          String?   // Only for credentials provider
-  name              String?
-  image             String?
-  provider          String?   // "credentials" or "google"
-  emailVerified     DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  accounts          Account[]
-  sessions          Session[]
-}
+| Column | Notes |
+|---|---|
+| `id` | CUID primary key |
+| `email` | Unique |
+| `name` | Optional |
+| `image` | Populated from Google profile for OAuth users |
+| `password` | Bcrypt hash. `null` for OAuth-only users |
+| `emailVerified` | Reserved for future email verification |
+| `primaryProvider` | `CREDENTIALS` \| `GOOGLE` \| `GITHUB` — updated on every sign-in |
+| `lastSignIn` | Updated on every sign-in |
+
+### Account
+OAuth tokens — **only OAuth sign-ins create a row here**. Credentials users have no Account row.
+
+| Column | Notes |
+|---|---|
+| `provider` | e.g. `"google"` |
+| `providerAccountId` | Provider's user ID |
+| `access_token` | Google access token |
+| `id_token` | Google ID token (contains user profile) |
+| `refresh_token` | Issued on first consent only |
+
+The PrismaAdapter writes to this table automatically on OAuth sign-in. You do not need to handle it manually.
+
+### Session
+Commented out — JWT strategy is stateless, no database sessions are written.
+
+### VerificationToken
+Reserved for future email verification (magic links).
+
+## Authentication Flows
+
+### Credentials (email/password)
+
+```
+Register → POST /api/auth/register → bcrypt hash → prisma.user.create
+Login    → signIn("credentials") → NextAuth authorize() → bcrypt.compare → JWT cookie
 ```
 
-### Account & Session Tables
+Only the `User` table is written to. No `Account` row is created.
 
-- `Account`: OAuth provider accounts linked to users
-- `Session`: JWT and database session information
-- `VerificationToken`: Email verification tokens
+### Google OAuth
 
-## Key Configuration
-
-### NextAuth Configuration (`src/app/api/auth/[...nextauth]/route.ts`)
-
-```typescript
-- Session Strategy: JWT (stateless, stored in cookies)
-- Providers: Credentials, Google
-- Session Max Age: 30 days
-- Callbacks: JWT and Session hooks configured
+```
+1. User clicks "Sign in with Google"
+2. Browser redirects to Google — user authenticates on Google's servers
+3. Google redirects to /api/auth/callback/google with an auth code
+4. NextAuth exchanges the code for access_token + id_token (server-side)
+5. PrismaAdapter creates or links User and Account rows automatically
+6. jwt callback stamps token.id and updates primaryProvider + lastSignIn
+7. Signed JWT cookie is set — no Session row is written
 ```
 
-### Route Protection Middleware (`src/middleware.ts`)
+**Same email, two providers:** If a user registers with credentials first, then signs in with Google using the same email, the adapter links a new `Account` row to the existing `User` row. No duplicate user is created.
 
-Server-side protection using NextAuth middleware:
+## Session Strategy
 
-```typescript
-Protected Routes:
-  - /dashboard/*          → Requires authentication
-  - /api/auth/me          → Requires authentication
+JWT sessions (`strategy: "jwt"`) are used. Sessions live in a signed HTTP-only cookie.
 
-Public Routes:
-  - /                     → Redirects authenticated users to /dashboard
-  - /auth/login           → Redirects authenticated users to /dashboard
-  - /auth/register        → Redirects authenticated users to /dashboard
+- No `Session` table needed
+- No database hit to validate a session — the cookie is decoded on each request
+- Sessions expire **12 hours after the original sign-in** (not after last activity)
+- Token is not automatically refreshed — user must sign in again after expiry
 
-Behavior:
-  - Unauthenticated users accessing protected routes → Redirected to /auth/login
-  - Authenticated users accessing auth pages → Redirected to /dashboard
-  - Token validation on every request
-  - Automatic session verification
+## Route Protection
+
+Enforced server-side in `src/middleware.ts` via NextAuth's `withAuth`:
+
+| Route | Behaviour |
+|---|---|
+| `/dashboard/*` | Requires auth — redirects to `/auth/login` if unauthenticated |
+| `/api/auth/me` | Requires auth — returns 401 if unauthenticated |
+| `/`, `/auth/login`, `/auth/register` | Redirects to `/dashboard` if already authenticated |
+
+## Environment Variables
+
+```env
+# .env.local
+
+DATABASE_URL=          # PostgreSQL connection string (Neon or self-hosted)
+NEXTAUTH_SECRET=       # Random secret for signing JWTs — required always
+NEXTAUTH_URL=          # Base URL — see table below
+
+GOOGLE_CLIENT_ID=      # From Google Cloud Console
+GOOGLE_CLIENT_SECRET=  # From Google Cloud Console
 ```
 
-The middleware ensures:
+### NEXTAUTH_URL
 
-- Protected routes cannot be accessed without valid authentication
-- Authenticated users cannot go back to login/register pages
-- Root page is smart - logged-in users go to dashboard
+| Environment | Required? |
+|---|---|
+| `localhost` dev | No — inferred from request |
+| Self-hosted server | Yes |
+| Vercel | No — falls back to `VERCEL_URL` automatically |
+| Custom domain on Vercel | Yes — set to your domain, not the `.vercel.app` URL |
 
-### Password Security
+### Google OAuth Setup
 
-- Salt rounds: 10
-- Algorithm: bcrypt
-- Minimum length: 6 characters
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID
+3. Application type: **Web application**
+4. Authorized redirect URIs — add exactly:
+   ```
+   http://localhost:3000/api/auth/callback/google
+   ```
+   For production, also add your production URL.
+5. Copy the Client ID and Secret into `.env.local`
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Push schema to database
+npx prisma db push
+
+# Start development server (also runs prisma generate)
+npm run dev
+```
 
 ## Available Scripts
 
 ```bash
-npm run dev        # Start development server
-npm run build      # Build production bundle
-npm run start      # Start production server
-npm run lint       # Run ESLint
-npm run migrate    # Run database migrations
+npm run dev       # prisma generate + next dev
+npm run build     # prisma generate + next build
+npm run start     # prisma generate + next start
+npm run lint      # ESLint
 ```
 
-## Security Features
+## Roadmap
 
-✅ **Password Security**
-
-- Bcrypt hashing with salt rounds
-- Secure password verification
-
-✅ **Session Security**
-
-- JWT tokens in HTTP-only cookies
-- CSRF protection via NextAuth
-- Secure credential transmission
-
-✅ **Database Security**
-
-- Connection pooling
-- Environment variable secrets
-- SQL injection prevention via Prisma
-
-## Next Steps
-
-1. **Connect Google OAuth**
-   - Get Google OAuth credentials
-   - Update `.env.local` with client ID and secret
-   - Test social login
-
-2. **Email Verification**
-   - Implement email verification flow
-   - Add `VerificationToken` logic
-   - Email confirmation required for account
-
-3. **Advanced Features**
-   - Password reset functionality
-   - Email notifications
-   - User profile management
-   - Two-factor authentication
-
-4. **Production Deployment**
-   - Configure NEXTAUTH_URL for production domain
-   - Set up HTTPS
-   - Configure production database
-   - Deploy to Vercel or similar platform
-
-## Troubleshooting
-
-### "Invalid email or password"
-
-- Check credentials in database
-- Verify password was hashed correctly during registration
-- Ensure email matches registered account
-
-### Session not persisting
-
-- Verify `NEXTAUTH_SECRET` is set
-- Check browser cookies are enabled
-- Confirm JWT session strategy is configured
-
-### Database connection errors
-
-- Verify `DATABASE_URL` in `.env.local`
-- Check network connection to database host
-- Ensure Prisma migrations have been run
-
-## Learn More
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [NextAuth.js Documentation](https://next-auth.js.org)
-- [Prisma Documentation](https://www.prisma.io/docs)
-- [Tailwind CSS](https://tailwindcss.com/docs)
-
-## License
-
-MIT
+- [x] Email/password authentication
+- [x] Google OAuth
+- [ ] Email verification on registration
+- [ ] Password reset via email
+- [ ] GitHub OAuth
