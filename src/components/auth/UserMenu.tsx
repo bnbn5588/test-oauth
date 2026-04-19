@@ -38,15 +38,25 @@ export function UserMenu() {
             <p className="text-xs text-gray-500">{session.user?.email}</p>
           </div>
 
-          <button
-            onClick={async () => {
-              setIsOpen(false);
-              await signOut({ redirect: true, callbackUrl: "/" });
-            }}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          <Link
+            href="/account"
+            onClick={() => setIsOpen(false)}
+            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Sign Out
-          </button>
+            Account
+          </Link>
+
+          <div className="border-t border-gray-200">
+            <button
+              onClick={async () => {
+                setIsOpen(false);
+                await signOut({ redirect: true, callbackUrl: "/" });
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       )}
     </div>

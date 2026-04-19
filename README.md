@@ -1,6 +1,6 @@
 # Auth App
 
-A Next.js authentication application supporting email/password credentials and Google OAuth, built with NextAuth.js, Prisma, and PostgreSQL.
+A Next.js authentication application supporting email/password credentials and Google OAuth, with email verification, built with NextAuth.js, Prisma, and PostgreSQL.
 
 ## Tech Stack
 
@@ -11,15 +11,18 @@ A Next.js authentication application supporting email/password credentials and G
 | Session strategy | JWT (stateless, 12-hour expiry) |
 | ORM | Prisma 5 + `@next-auth/prisma-adapter` |
 | Database | PostgreSQL (Neon) |
+| Email | Resend |
 | Styling | Tailwind CSS v4 |
 | Language | TypeScript |
 
 ## Features
 
 - Email/password registration and login (bcrypt hashing)
-- Google OAuth sign-in
+- Email verification on registration — unverified users are blocked from signing in
+- Google OAuth sign-in with automatic account linking for same-email accounts
 - JWT sessions stored in HTTP-only cookies — no database session table
 - Protected routes via Next.js middleware
+- Account page showing profile, sign-in methods, and account details
 - OAuth provider and last sign-in tracking per user
 - Session expiry countdown on dashboard
 
@@ -31,10 +34,14 @@ src/
 │   ├── api/auth/
 │   │   ├── [...nextauth]/route.ts   # NextAuth config — providers, callbacks
 │   │   ├── register/route.ts        # POST /api/auth/register
+│   │   ├── verify-email/route.ts    # GET  /api/auth/verify-email (validates token)
 │   │   └── me/route.ts              # GET  /api/auth/me  (protected)
 │   ├── auth/
 │   │   ├── login/page.tsx           # Login page
-│   │   └── register/page.tsx        # Register page
+│   │   ├── register/page.tsx        # Register page
+│   │   ├── check-email/page.tsx     # "Check your inbox" page after registration
+│   │   └── verify-email/page.tsx    # Email verification success/error page
+│   ├── account/page.tsx             # Protected account page
 │   ├── dashboard/page.tsx           # Protected dashboard with session countdown
 │   └── layout.tsx                   # Root layout — wraps app with providers
 ├── components/
@@ -42,13 +49,15 @@ src/
 │   │   ├── LoginForm.tsx            # Credentials login form
 │   │   ├── RegisterForm.tsx         # Registration form
 │   │   ├── GoogleSignInButton.tsx   # Google OAuth button
-│   │   └── UserMenu.tsx             # Dropdown with sign-out
+│   │   └── UserMenu.tsx             # Dropdown with account link and sign-out
 │   └── providers/
 │       └── NextAuthSessionProvider.tsx
 ├── context/
 │   └── AuthContext.tsx              # Shared auth state + helpers
 ├── lib/
 │   ├── auth.ts                      # registerUser, loginUser, getUserBy*
+│   ├── email.ts                     # sendVerificationEmail via Resend
+│   ├── tokens.ts                    # generateVerificationToken, validateVerificationToken
 │   └── prisma.ts                    # Prisma client singleton
 ├── middleware.ts                    # Route protection
 └── types/
@@ -71,7 +80,7 @@ All users share this table regardless of how they sign in.
 | `name` | Optional |
 | `image` | Populated from Google profile for OAuth users |
 | `password` | Bcrypt hash. `null` for OAuth-only users |
-| `emailVerified` | Reserved for future email verification |
+| `emailVerified` | Stamped when user clicks verification link. `null` = unverified |
 | `primaryProvider` | `CREDENTIALS` \| `GOOGLE` \| `GITHUB` — updated on every sign-in |
 | `lastSignIn` | Updated on every sign-in |
 
@@ -92,18 +101,32 @@ The PrismaAdapter writes to this table automatically on OAuth sign-in. You do no
 Commented out — JWT strategy is stateless, no database sessions are written.
 
 ### VerificationToken
-Reserved for future email verification (magic links).
+Stores email verification tokens. One row per pending verification — deleted after use or expiry.
+
+| Column | Notes |
+|---|---|
+| `identifier` | The user's email address |
+| `token` | 32-byte random hex token |
+| `expires` | 24 hours from creation |
 
 ## Authentication Flows
 
 ### Credentials (email/password)
 
 ```
-Register → POST /api/auth/register → bcrypt hash → prisma.user.create
-Login    → signIn("credentials") → NextAuth authorize() → bcrypt.compare → JWT cookie
-```
+Register → POST /api/auth/register
+         → bcrypt hash → prisma.user.create
+         → generateVerificationToken → sendVerificationEmail (Resend)
+         → redirect to /auth/check-email (no auto sign-in)
 
-Only the `User` table is written to. No `Account` row is created.
+Verify   → User clicks link → GET /api/auth/verify-email?token=...
+         → validateVerificationToken → prisma.user.update (emailVerified = now)
+         → redirect to /auth/verify-email?success=true
+
+Login    → signIn("credentials") → NextAuth authorize() → bcrypt.compare
+         → signIn callback checks emailVerified — blocks if null
+         → JWT cookie set
+```
 
 ### Google OAuth
 
@@ -117,7 +140,9 @@ Only the `User` table is written to. No `Account` row is created.
 7. Signed JWT cookie is set — no Session row is written
 ```
 
-**Same email, two providers:** If a user registers with credentials first, then signs in with Google using the same email, the adapter links a new `Account` row to the existing `User` row. No duplicate user is created.
+**Google users skip email verification** — Google has already verified the email.
+
+**Same email, two providers:** If a user registers with credentials first, then signs in with Google using the same email, the adapter links a new `Account` row to the existing `User` row (`allowDangerousEmailAccountLinking: true`). No duplicate user is created.
 
 ## Session Strategy
 
@@ -135,6 +160,7 @@ Enforced server-side in `src/middleware.ts` via NextAuth's `withAuth`:
 | Route | Behaviour |
 |---|---|
 | `/dashboard/*` | Requires auth — redirects to `/auth/login` if unauthenticated |
+| `/account/*` | Requires auth — redirects to `/auth/login` if unauthenticated |
 | `/api/auth/me` | Requires auth — returns 401 if unauthenticated |
 | `/`, `/auth/login`, `/auth/register` | Redirects to `/dashboard` if already authenticated |
 
@@ -149,6 +175,9 @@ NEXTAUTH_URL=          # Base URL — see table below
 
 GOOGLE_CLIENT_ID=      # From Google Cloud Console
 GOOGLE_CLIENT_SECRET=  # From Google Cloud Console
+
+RESEND_API_KEY=        # From resend.com
+EMAIL_FROM=            # Verified sender address (e.g. noreply@yourdomain.com)
 ```
 
 ### NEXTAUTH_URL
@@ -171,6 +200,13 @@ GOOGLE_CLIENT_SECRET=  # From Google Cloud Console
    ```
    For production, also add your production URL.
 5. Copy the Client ID and Secret into `.env.local`
+
+### Resend Email Setup
+
+1. Sign up at [resend.com](https://resend.com) and get an API key
+2. Add and verify your domain in the Resend dashboard (required to send to any recipient)
+3. Set `EMAIL_FROM` to an address on your verified domain
+4. During development, `onboarding@resend.dev` can be used but only delivers to your Resend account email
 
 ## Getting Started
 
@@ -197,7 +233,8 @@ npm run lint      # ESLint
 ## Roadmap
 
 - [x] Email/password authentication
-- [x] Google OAuth
-- [ ] Email verification on registration
+- [x] Google OAuth with account linking
+- [x] Email verification on registration
+- [x] Account page
 - [ ] Password reset via email
 - [ ] GitHub OAuth

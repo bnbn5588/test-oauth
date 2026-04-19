@@ -34,7 +34,7 @@ export default withAuth(
         const pathname = req.nextUrl.pathname;
 
         // Protect dashboard routes - require authentication
-        if (pathname.startsWith("/dashboard") || pathname === "/api/auth/me") {
+        if (pathname.startsWith("/dashboard") || pathname.startsWith("/account") || pathname === "/api/auth/me") {
           return !!token; // Only allow if token exists
         }
 
@@ -53,6 +53,7 @@ export const config = {
   matcher: [
     "/", // Root page
     "/dashboard/:path*", // Dashboard routes
+    "/account/:path*", // Account routes
     "/auth/:path*", // Auth pages (login, register)
     "/api/auth/me", // Protected API endpoint
   ],
