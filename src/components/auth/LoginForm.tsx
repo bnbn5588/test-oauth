@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import React, { useState } from "react";
 
 export function LoginForm() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export function LoginForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.BaseSyntheticEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
@@ -30,6 +30,11 @@ export function LoginForm() {
         password: formData.password,
         redirect: false,
       });
+
+      if (result?.error === "AccessDenied") {
+        setError("Please verify your email address before signing in. Check your inbox.");
+        return;
+      }
 
       if (result?.error) {
         setError("Invalid email or password");

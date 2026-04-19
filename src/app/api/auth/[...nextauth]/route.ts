@@ -12,6 +12,7 @@ const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -72,8 +73,17 @@ const authOptions: NextAuthOptions = {
     updateAge: 0, // Disable automatic token refresh
   },
   callbacks: {
-    async signIn() {
-      return true;
+    async signIn({ user, account }) {
+      // Google OAuth users skip email verification — Google already verified the email
+      if (account?.provider !== "credentials") return true;
+
+      // Block credentials users who haven't verified their email yet
+      const dbUser = await prisma.user.findUnique({
+        where: { email: user.email! },
+        select: { emailVerified: true },
+      });
+
+      return !!dbUser?.emailVerified;
     },
     async jwt({ token, user, account }) {
       if (user) {
@@ -90,7 +100,8 @@ const authOptions: NextAuthOptions = {
           github: AuthProvider.GITHUB,
           credentials: AuthProvider.CREDENTIALS,
         };
-        const provider = providerMap[account.provider] ?? AuthProvider.CREDENTIALS;
+        const provider =
+          providerMap[account.provider] ?? AuthProvider.CREDENTIALS;
         await prisma.user.update({
           where: { email: user.email },
           data: { primaryProvider: provider, lastSignIn: new Date() },

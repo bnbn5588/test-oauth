@@ -84,18 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(error.error || "Registration failed");
       }
 
-      const user = await response.json();
-
-      // After successful registration, sign in the user
-      const signInResult = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (!signInResult?.ok) {
-        throw new Error("Registration successful but login failed");
-      }
+      // Registration successful — user must verify email before signing in
     } catch (error) {
       console.error("Register error:", error);
       throw error;

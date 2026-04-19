@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 export function RegisterForm() {
@@ -22,7 +22,7 @@ export function RegisterForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.BaseSyntheticEvent) => {
     e.preventDefault();
     setError("");
 
@@ -41,7 +41,7 @@ export function RegisterForm() {
 
     try {
       await register(formData.email, formData.password, formData.name);
-      router.push("/dashboard");
+      router.push(`/auth/check-email?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
       setError(
         err instanceof Error

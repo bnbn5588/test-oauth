@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { registerUser } from "@/lib/auth";
+import { generateVerificationToken } from "@/lib/tokens";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password, name } = await request.json();
 
-    // Validation
     if (!email || !password || !name) {
       return NextResponse.json(
         { error: "Missing required fields" },
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await registerUser(email, password, name);
+
+    const token = await generateVerificationToken(email);
+    await sendVerificationEmail(email, token);
 
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
