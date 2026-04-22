@@ -1,5 +1,7 @@
 FROM node:20-alpine AS base
 WORKDIR /app
+# Required for sharp, bcrypt, and other native modules on Alpine
+RUN apk add --no-cache libc6-compat
 
 # ── Stage 1: All deps (build + prisma CLI tools) ────────────────────────────
 FROM base AS all-deps
@@ -10,8 +12,11 @@ RUN npm ci
 FROM base AS builder
 COPY --from=all-deps /app/node_modules ./node_modules
 COPY . .
-# prisma generate reads the schema only — no real DB connection at build time
-RUN DATABASE_URL="postgresql://build:build@localhost/build" npm run build
+# Placeholder values satisfy NextAuth + Prisma at build time — real values come from .env at runtime
+RUN DATABASE_URL="postgresql://build:build@localhost/build" \
+    NEXTAUTH_SECRET="build-placeholder-secret" \
+    NEXTAUTH_URL="http://localhost:3000" \
+    npm run build
 
 # ── Stage 3: Minimal production runner ──────────────────────────────────────
 FROM base AS runner
