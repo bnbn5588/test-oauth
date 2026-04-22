@@ -52,6 +52,9 @@ jobs:
     permissions:
       contents: read
       packages: read
+    env:
+      # Oracle Linux defaults DOCKER_HOST to Podman — override it for every step
+      DOCKER_HOST: unix:///var/run/docker.sock
 
     steps:
       - name: Checkout
