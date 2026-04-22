@@ -1,0 +1,40 @@
+FROM node:20-alpine AS base
+WORKDIR /app
+
+# ── Stage 1: All deps (build + prisma CLI tools) ────────────────────────────
+FROM base AS all-deps
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# ── Stage 2: Build ───────────────────────────────────────────────────────────
+FROM base AS builder
+COPY --from=all-deps /app/node_modules ./node_modules
+COPY . .
+# prisma generate reads the schema only — no real DB connection at build time
+RUN DATABASE_URL="postgresql://build:build@localhost/build" npm run build
+
+# ── Stage 3: Minimal production runner ──────────────────────────────────────
+FROM base AS runner
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Next.js standalone output
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+# Prisma schema + CLI for running migrations at startup.
+# @prisma/client is already bundled by standalone; we add the CLI + engine here.
+COPY --from=builder /app/prisma ./prisma
+COPY --from=all-deps /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=all-deps /app/node_modules/prisma ./node_modules/prisma
+COPY --from=all-deps /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+
+USER nextjs
+EXPOSE 3000
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]

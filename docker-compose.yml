@@ -1,0 +1,8 @@
+services:
+  nextjs:
+    image: ${APP_IMAGE:-ghcr.io/placeholder/test-oauth:latest}
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
