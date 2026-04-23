@@ -1,7 +1,8 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-# Required for sharp, bcrypt, and other native modules on Alpine
-RUN apk add --no-cache libc6-compat
+# libc6-compat: native modules (sharp, bcrypt)
+# openssl: lets Prisma detect OpenSSL 3.x — without it Prisma defaults to 1.1 which is missing on modern Alpine
+RUN apk add --no-cache libc6-compat openssl
 
 # ── Stage 1: All deps (build + prisma CLI tools) ────────────────────────────
 FROM base AS all-deps
