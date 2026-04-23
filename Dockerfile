@@ -35,6 +35,9 @@ COPY --from=builder /app/public ./public
 
 
 COPY --from=all-deps /app/node_modules ./node_modules
+# Restore the generated Prisma client — all-deps never runs prisma generate,
+# so .prisma/client/ only exists in builder. Copy it back after the overwrite.
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 
 USER nextjs
