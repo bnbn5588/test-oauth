@@ -28,17 +28,18 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Next.js standalone output
+# Next.js standalone output (includes trimmed node_modules for the app)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-
-COPY --from=all-deps /app/node_modules ./node_modules
-# Restore the generated Prisma client — all-deps never runs prisma generate,
-# so .prisma/client/ only exists in builder. Copy it back after the overwrite.
+# Generated Prisma client (prisma generate only runs in builder, not in standalone tracing)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Prisma CLI for migrations — npm install sets up symlinks correctly
 COPY --from=builder /app/prisma ./prisma
+COPY package.json ./
+RUN npm install --no-save --quiet prisma@5.22.0
 
 USER nextjs
 EXPOSE 3000
