@@ -8,6 +8,10 @@ import { AuthProvider } from "@prisma/client";
 
 const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  // Required when running behind a reverse proxy (nginx → localhost:3000).
+  // Without this, NextAuth sets cookies without the Secure flag because it
+  // sees the internal HTTP connection, causing the state cookie to be dropped.
+  useSecureCookies: true,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
